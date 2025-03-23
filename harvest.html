@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Raspberry Harvest Game</title>
+  <style>
+    body {
+      background-color: #222;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #fff;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    canvas {
+      background-color: #6B8E23; /* Field color: olive drab */
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    #scoreboard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 24px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px 15px;
+      border-radius: 5px;
+    }
+    #winMessage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px 40px;
+      border-radius: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="scoreboard">Score: 0</div>
+  <div id="winMessage">You Win!</div>
+  <canvas id="gameCanvas" width="800" height="600" tabindex="1"></canvas>
+  <script>
+    // Get canvas and context
+    const canvas = document.getElementById('gameCanvas');
+    canvas.focus();
+    canvas.addEventListener('click', () => { canvas.focus(); });
+    const ctx = canvas.getContext('2d');
+
+    // Score display and win message
+    const scoreDisplay = document.getElementById('scoreboard');
+    const winMessage = document.getElementById('winMessage');
+    let score = 0;
+    let gameWon = false;
+    let collisionMessageTimer = 0;
+
+    // Global variables for Pac-Man mouth animation and timing
+    let pacMouthAngle = 0.2;
+    let pacMouthDelta = 0.05;
+    let gameStartTime = Date.now();
+    let lastCloneTime = 0;
+
+    // Track keys pressed and space shooting control
+    const keys = {};
+    let spacePressed = false;
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.code === 'Space') {
+        if (!spacePressed) {
+          shootBullet();
+          spacePressed = true;
+        }
+      } else {
+        keys[e.key] = true;
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === ' ' || e.code === 'Space') {
+        spacePressed = false;
+      } else {
+        keys[e.key] = false;
+      }
+    });
+
+    // Player: represented as a Pac-Man style character with animated mouth
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 20,
+      speed: 3
+    };
+
+    let playerAngle = 0; // direction player is facing
+    // Load player image (not used in Pac-Man mode, but kept for reference)
+    const playerImage = new Image();
+    playerImage.src = "rose_cat.png";
+    let useFallback = false;
+    playerImage.onerror = function() {
+      useFallback = true;
+    };
+
+    // Bullets fired by the player
+    const bullets = [];
+    const bulletSpeed = 6;
+    function shootBullet() {
+      bullets.push({
+        x: player.x,
+        y: player.y,
+        dx: Math.cos(playerAngle) * bulletSpeed,
+        dy: Math.sin(playerAngle) * bulletSpeed,
+        radius: 5
+      });
+    }
+
+    // Obstacles: walls (as rectangles)
+    const walls = [
+      { x: 100, y: 150, width: 150, height: 20 },
+      { x: 500, y: 300, width: 20, height: 150 },
+      { x: 250, y: 450, width: 200, height: 20 }
+    ];
+
+    // Fruit objects: raspberries (good) and blueberries (bad)
+    const fruits = [];
+    const totalRaspberries = 20;
+    const totalBlueberries = 5;
+    function initFruits() {
+      fruits.length = 0; // clear current fruits
+      // Create raspberries
+      for (let i = 0; i < totalRaspberries; i++) {
+        fruits.push({
+          x: Math.random() * (canvas.width - 40) + 20,
+          y: Math.random() * (canvas.height - 40) + 20,
+          radius: 10,
+          type: 'raspberry'
+        });
+      }
+      // Create blueberries
+      for (let i = 0; i < totalBlueberries; i++) {
+        fruits.push({
+          x: Math.random() * (canvas.width - 40) + 20,
+          y: Math.random() * (canvas.height - 40) + 20,
+          radius: 10,
+          type: 'blueberry'
+        });
+      }
+    }
+    initFruits();
+
+    // Beetles: wander around and 'eat' the fruits if they get too close.
+    const beetles = [];
+    const totalBeetles = 3;
+    function initBeetles() {
+      for (let i = 0; i < totalBeetles; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        beetles.push({
+          x: Math.random() * (canvas.width - 40) + 20,
+          y: Math.random() * (canvas.height - 40) + 20,
+          radius: 15,
+          speed: 1.5,
+          dx: Math.cos(angle) * 1.5,
+          dy: Math.sin(angle) * 1.5
+        });
+      }
+    }
+    initBeetles();
+
+    // Helper: Calculate distance between two points
+    function distance(x1, y1, x2, y2) {
+      return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+    }
+
+    // Check collision between a circle and a rectangle (for player and bullet vs walls)
+    function circleRectCollision(circle, rect) {
+      let distX = Math.abs(circle.x - rect.x - rect.width / 2);
+      let distY = Math.abs(circle.y - rect.y - rect.height / 2);
+
+      if (distX > (rect.width / 2 + circle.radius)) { return false; }
+      if (distY > (rect.height / 2 + circle.radius)) { return false; }
+
+      if (distX <= (rect.width / 2)) { return true; }
+      if (distY <= (rect.height / 2)) { return true; }
+
+      let dx = distX - rect.width / 2;
+      let dy = distY - rect.height / 2;
+      return (dx * dx + dy * dy <= (circle.radius * circle.radius));
+    }
+
+    // Update game state
+    function update() {
+      if (gameWon) return;
+
+      // Store old position for collision check with walls
+      const oldX = player.x;
+      const oldY = player.y;
+
+      // Update player position based on keys (arrow keys or WASD) and update facing angle
+      if (keys['ArrowUp'] || keys['w']) {
+        player.y -= player.speed;
+        playerAngle = -Math.PI / 2;
+      }
+      if (keys['ArrowDown'] || keys['s']) {
+        player.y += player.speed;
+        playerAngle = Math.PI / 2;
+      }
+      if (keys['ArrowLeft'] || keys['a']) {
+        player.x -= player.speed;
+        playerAngle = Math.PI;
+      }
+      if (keys['ArrowRight'] || keys['d']) {
+        player.x += player.speed;
+        playerAngle = 0;
+      }
+
+      // Check collision with walls; if colliding, revert to old position
+      for (let wall of walls) {
+        if (circleRectCollision(player, wall)) {
+          player.x = oldX;
+          player.y = oldY;
+          break;
+        }
+      }
+
+      // Update Pac-Man mouth animation
+      pacMouthAngle += pacMouthDelta;
+      if (pacMouthAngle > 0.5 || pacMouthAngle < 0.1) {
+        pacMouthDelta *= -1;
+      }
+
+      // Update beetle positions and bounce off canvas boundaries and walls
+      beetles.forEach(beetle => {
+        beetle.x += beetle.dx;
+        beetle.y += beetle.dy;
+        // Bounce off canvas edges
+        if (beetle.x < beetle.radius || beetle.x > canvas.width - beetle.radius) {
+          beetle.dx *= -1;
+        }
+        if (beetle.y < beetle.radius || beetle.y > canvas.height - beetle.radius) {
+          beetle.dy *= -1;
+        }
+        // Bounce off walls
+        for (let wall of walls) {
+          if (circleRectCollision(beetle, wall)) {
+            beetle.dx *= -1;
+            beetle.dy *= -1;
+          }
+        }
+      });
+
+      // Update bullets positions and check collisions with walls, beetles, and fruits
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        let bullet = bullets[i];
+        bullet.x += bullet.dx;
+        bullet.y += bullet.dy;
+        // Remove bullet if off canvas
+        if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+          bullets.splice(i, 1);
+          continue;
+        }
+        let bulletRemoved = false;
+        // Check collision with walls: remove bullet and the wall if collision occurs
+        for (let w = walls.length - 1; w >= 0; w--) {
+          if (circleRectCollision(bullet, walls[w])) {
+            bullets.splice(i, 1);
+            walls.splice(w, 1);
+            bulletRemoved = true;
+            break;
+          }
+        }
+        if (bulletRemoved) continue;
+        // Check collision with beetles: remove bullet and the beetle
+        for (let j = beetles.length - 1; j >= 0; j--) {
+          if (distance(bullet.x, bullet.y, beetles[j].x, beetles[j].y) < bullet.radius + beetles[j].radius) {
+            bullets.splice(i, 1);
+            beetles.splice(j, 1);
+            bulletRemoved = true;
+            break;
+          }
+        }
+        if (bulletRemoved) continue;
+        // Check collision with fruits: remove bullet and the fruit
+        for (let f = fruits.length - 1; f >= 0; f--) {
+          if (distance(bullet.x, bullet.y, fruits[f].x, fruits[f].y) < bullet.radius + fruits[f].radius) {
+            bullets.splice(i, 1);
+            fruits.splice(f, 1);
+            bulletRemoved = true;
+            break;
+          }
+        }
+      }
+
+      // Check collision between player and fruits
+      for (let i = fruits.length - 1; i >= 0; i--) {
+        const fruit = fruits[i];
+        if (distance(player.x, player.y, fruit.x, fruit.y) < player.radius + fruit.radius) {
+          if (fruit.type === 'raspberry') {
+            score += 1;
+          } else if (fruit.type === 'blueberry') {
+            score = Math.max(0, score - 1);
+          }
+          fruits.splice(i, 1);
+        }
+      }
+
+      // Beetles eat fruits if they come close and clone themselves (with 10s delay from game start and 5s between clones)
+      beetles.forEach(beetle => {
+        for (let i = fruits.length - 1; i >= 0; i--) {
+          const fruit = fruits[i];
+          if (distance(beetle.x, beetle.y, fruit.x, fruit.y) < beetle.radius + fruit.radius) {
+            fruits.splice(i, 1);
+            if (Date.now() - gameStartTime > 10000 && (Date.now() - lastCloneTime > 5000) && beetles.length < 50) {
+              let cloneBug = {
+                x: beetle.x,
+                y: beetle.y,
+                radius: beetle.radius,
+                speed: beetle.speed,
+                dx: Math.cos(Math.random() * Math.PI * 2) * beetle.speed,
+                dy: Math.sin(Math.random() * Math.PI * 2) * beetle.speed
+              };
+              beetles.push(cloneBug);
+              lastCloneTime = Date.now();
+            }
+          }
+        }
+      });
+
+      // Bugs clone when they collide with each other (with delay)
+      for (let i = 0; i < beetles.length; i++) {
+        for (let j = i + 1; j < beetles.length; j++) {
+          if (distance(beetles[i].x, beetles[i].y, beetles[j].x, beetles[j].y) < beetles[i].radius + beetles[j].radius) {
+            if (Date.now() - gameStartTime > 10000 && (Date.now() - lastCloneTime > 5000) && beetles.length < 50) {
+              let cloneBug = {
+                x: (beetles[i].x + beetles[j].x) / 2,
+                y: (beetles[i].y + beetles[j].y) / 2,
+                radius: 15,
+                speed: 1.5,
+                dx: Math.cos(Math.random() * Math.PI * 2) * 1.5,
+                dy: Math.sin(Math.random() * Math.PI * 2) * 1.5
+              };
+              beetles.push(cloneBug);
+              lastCloneTime = Date.now();
+            }
+          }
+        }
+      }
+
+      // Check collision between beetles and player (corrected)
+      beetles.forEach(beetle => {
+        if (distance(player.x, player.y, beetle.x, beetle.y) < player.radius + beetle.radius) {
+          score = Math.max(0, score - 10);
+          collisionMessageTimer = 60; // show collision effect for 60 frames
+        }
+      });
+
+      // Respawn fruits if too few remain on the field
+      if (fruits.length < 10) {
+        initFruits();
+      }
+
+      // Update collision effect timer
+      if (collisionMessageTimer > 0) {
+        collisionMessageTimer--;
+      }
+
+      // Update the score display and check win condition (50 raspberries collected)
+      scoreDisplay.textContent = "Score: " + score;
+      if (score >= 50) {
+        gameWon = true;
+        winMessage.style.display = "block";
+      }
+    }
+
+    // Draw the player in Pac-Man style with animated mouth
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(playerAngle);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, player.radius, pacMouthAngle, Math.PI * 2 - pacMouthAngle);
+      ctx.lineTo(0, 0);
+      ctx.fillStyle = "yellow";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Draw fruit: raspberries are clusters with extra detail; blueberries use a gradient
+    function drawFruit(fruit) {
+      ctx.save();
+      ctx.translate(fruit.x, fruit.y);
+      if (fruit.type === 'raspberry') {
+        ctx.fillStyle = "red";
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI * 2 / 6) * i;
+          ctx.beginPath();
+          ctx.arc(Math.cos(angle) * 4, Math.sin(angle) * 4, fruit.radius * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, fruit.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = "darkred";
+        ctx.stroke();
+      } else if (fruit.type === 'blueberry') {
+        let gradient = ctx.createRadialGradient(0, 0, fruit.radius / 4, 0, 0, fruit.radius);
+        gradient.addColorStop(0, "lightblue");
+        gradient.addColorStop(1, "blue");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, fruit.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Draw beetle: enhanced with gradient, eyes, and legs
+    function drawBeetle(beetle) {
+      ctx.save();
+      ctx.translate(beetle.x, beetle.y);
+      // Body with gradient
+      let gradient = ctx.createRadialGradient(0, 0, beetle.radius / 4, 0, 0, beetle.radius);
+      gradient.addColorStop(0, "#A0522D");
+      gradient.addColorStop(1, "#8B4513");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, beetle.radius, beetle.radius * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Head
+      ctx.beginPath();
+      ctx.arc(beetle.radius * 0.8, 0, beetle.radius * 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = "#8B4513";
+      ctx.fill();
+      // Eyes
+      ctx.beginPath();
+      ctx.arc(beetle.radius * 0.8, -beetle.radius * 0.1, beetle.radius * 0.1, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(beetle.radius * 0.8, -beetle.radius * 0.1, beetle.radius * 0.05, 0, Math.PI * 2);
+      ctx.fillStyle = "#000";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Draw walls (obstacles)
+    function drawWalls() {
+      ctx.save();
+      ctx.fillStyle = "#555";
+      walls.forEach(wall => {
+        ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+      });
+      ctx.restore();
+    }
+
+    // Draw bullets
+    function drawBullets() {
+      ctx.save();
+      ctx.fillStyle = "white";
+      bullets.forEach(bullet => {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // Draw all game elements
+    function draw() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Draw background field
+      ctx.fillStyle = "#6B8E23";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw walls
+      drawWalls();
+      
+      // Draw fruits
+      fruits.forEach(fruit => drawFruit(fruit));
+      
+      // Draw beetles
+      beetles.forEach(beetle => drawBeetle(beetle));
+      
+      // Draw bullets
+      drawBullets();
+      
+      // Draw player
+      drawPlayer();
+
+      // Display collision effect if active
+      if (collisionMessageTimer > 0) {
+        ctx.save();
+        ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.radius + 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "white";
+        ctx.font = "20px sans-serif";
+        ctx.fillText("oops ..", player.x - 20, player.y - player.radius - 10);
+        ctx.restore();
+      }
+    }
+
+    // Main game loop
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
+  </script>
+</body>
+</html>
