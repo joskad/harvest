@@ -14,6 +14,7 @@
       color: #fff;
       font-family: sans-serif;
       overflow: hidden;
+      position: relative;
     }
     canvas {
       background-color: #6B8E23; /* Field color: olive drab */
@@ -40,12 +41,48 @@
       border-radius: 10px;
       display: none;
     }
+    /* On-screen controls */
+    #controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 1000;
+    }
+    #controls button {
+      background-color: rgba(255, 255, 255, 0.7);
+      border: none;
+      padding: 10px;
+      margin: 5px;
+      font-size: 18px;
+      border-radius: 5px;
+    }
+    #middleControls {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
   <div id="scoreboard">Score: 0</div>
   <div id="winMessage">You Win!</div>
   <canvas id="gameCanvas" width="800" height="600" tabindex="1"></canvas>
+  
+  <!-- On-screen controls -->
+  <div id="controls">
+    <button id="upBtn">↑</button>
+    <div id="middleControls">
+      <button id="leftBtn">←</button>
+      <button id="shootBtn">Shoot</button>
+      <button id="rightBtn">→</button>
+    </div>
+    <button id="downBtn">↓</button>
+  </div>
+  
   <script>
     // Get canvas and context
     const canvas = document.getElementById('gameCanvas');
@@ -86,6 +123,17 @@
         keys[e.key] = false;
       }
     });
+
+    // On-screen controls (for touch devices)
+    document.getElementById('upBtn').addEventListener('touchstart', () => { keys['ArrowUp'] = true; });
+    document.getElementById('upBtn').addEventListener('touchend', () => { keys['ArrowUp'] = false; });
+    document.getElementById('leftBtn').addEventListener('touchstart', () => { keys['ArrowLeft'] = true; });
+    document.getElementById('leftBtn').addEventListener('touchend', () => { keys['ArrowLeft'] = false; });
+    document.getElementById('downBtn').addEventListener('touchstart', () => { keys['ArrowDown'] = true; });
+    document.getElementById('downBtn').addEventListener('touchend', () => { keys['ArrowDown'] = false; });
+    document.getElementById('rightBtn').addEventListener('touchstart', () => { keys['ArrowRight'] = true; });
+    document.getElementById('rightBtn').addEventListener('touchend', () => { keys['ArrowRight'] = false; });
+    document.getElementById('shootBtn').addEventListener('touchstart', () => { shootBullet(); });
 
     // Player: represented as a Pac-Man style character with animated mouth
     const player = {
@@ -348,7 +396,7 @@
         }
       }
 
-      // Check collision between beetles and player (corrected)
+      // Check collision between beetles and player
       beetles.forEach(beetle => {
         if (distance(player.x, player.y, beetle.x, beetle.y) < player.radius + beetle.radius) {
           score = Math.max(0, score - 10);
