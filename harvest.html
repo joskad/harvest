@@ -43,7 +43,7 @@
       display: none;
       z-index: 100;
     }
-    /* Movement Joystick (Right) - repositioned and enlarged by ~15% */
+    /* Movement Joystick (Right) - repositioned and enlarged ~15% */
     #joystickMovementContainer {
       position: absolute;
       top: 25vh;
@@ -70,12 +70,12 @@
       left: 28.5px;
       touch-action: none;
     }
-    /* Shooting Joystick (Left) – repositioned and enlarged by ~15% */
+    /* Shooting Joystick (Left) – repositioned and enlarged ~15% */
     #joystickShootingContainer {
       position: absolute;
       bottom: 120px;  /* Moved up a bit */
       left: 40px;     /* Moved inward from left edge */
-      width: 126px;   /* 126px ~15% larger than 110px */
+      width: 126px;
       height: 126px;
       z-index: 200;
       touch-action: none;
@@ -93,7 +93,7 @@
       height: 63px;
       background: rgba(255, 255, 255, 0.7);
       border-radius: 50%;
-      top: 32px;  /* (126-63)/2 approximated */
+      top: 32px;  
       left: 32px;
       touch-action: none;
     }
@@ -230,7 +230,7 @@
       // Update the shooting knob's position
       joystickShootingKnob.style.left = ((joystickShootingContainer.offsetWidth - joystickShootingKnob.offsetWidth) / 2 + dx) + "px";
       joystickShootingKnob.style.top = ((joystickShootingContainer.offsetHeight - joystickShootingKnob.offsetHeight) / 2 + dy) + "px";
-      // Do NOT update playerAngle from shooting joystick; movement joystick controls that.
+      // Do NOT update playerAngle here; movement joystick controls that.
     }
 
     joystickShootingContainer.addEventListener('touchstart', (e) => {
@@ -243,7 +243,7 @@
     });
     joystickShootingContainer.addEventListener('touchend', (e) => {
       e.preventDefault();
-      // On release, fire a bullet using the current playerAngle.
+      // On release, fire a bullet using the current player facing direction.
       if (shootingJoystickVector.x !== 0 || shootingJoystickVector.y !== 0) {
         shootBullet();
       }
@@ -271,7 +271,7 @@
       useFallback = true;
     };
 
-    // Bullets fired by the player; if no angle provided, uses playerAngle.
+    // Bullets fired by the player; if no angle provided, use playerAngle.
     const bulletSpeed = 6;
     function shootBullet(angle) {
       if (angle === undefined) {
@@ -337,7 +337,7 @@
     }
     initBeetles();
 
-    // Helper: distance
+    // Helper: distance between two points
     function distance(x1, y1, x2, y2) {
       return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
     }
@@ -397,7 +397,7 @@
       beetles.forEach(beetle => {
         beetle.x += beetle.dx;
         beetle.y += beetle.dy;
-        if (beetle.x < beetle.radius || beetle.x > canvas.width - beetles.radius) {
+        if (beetle.x < beetle.radius || beetle.x > canvas.width - beetle.radius) {
           beetle.dx *= -1;
         }
         if (beetle.y < beetle.radius || beetle.y > canvas.height - beetle.radius) {
@@ -501,21 +501,11 @@
       }
       // Collision between beetles and player
       beetles.forEach(beetle => {
-        if (distance(player.x, player.y, beetles[j].x, beetles[j].y) < player.radius + beetle.radius) {
-          // Fix: we iterate over beetles individually so use beetle.x, beetle.y
-          if (distance(player.x, player.y, beetle.x, beetle.y) < player.radius + beetle.radius) {
-            score = Math.max(0, score - 10);
-            collisionMessageTimer = 60;
-          }
+        if (distance(player.x, player.y, beetle.x, beetle.y) < player.radius + beetle.radius) {
+          score = Math.max(0, score - 10);
+          collisionMessageTimer = 60;
         }
       });
-      // Corrected collision between beetles and player (if above block misbehaves, use this instead):
-      // beetles.forEach(beetle => {
-      //   if (distance(player.x, player.y, beetle.x, beetle.y) < player.radius + beetle.radius) {
-      //     score = Math.max(0, score - 10);
-      //     collisionMessageTimer = 60;
-      //   }
-      // });
       // Respawn fruits if needed
       if (fruits.length < 10) {
         initFruits();
@@ -620,7 +610,7 @@
       ctx.restore();
     }
 
-    // Draw all game elements
+    // Draw everything
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#6B8E23";
