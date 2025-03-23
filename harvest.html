@@ -46,28 +46,28 @@
     /* Movement Joystick (Right) */
     #joystickMovementContainer {
       position: absolute;
-      bottom: 20px;
+      top: 25vh;
       right: 20px;
-      width: 100px;
-      height: 100px;
+      width: 115px;
+      height: 115px;
       z-index: 200;
       touch-action: none;
     }
     #joystickMovementBase {
       position: absolute;
-      width: 100px;
-      height: 100px;
+      width: 115px;
+      height: 115px;
       background: rgba(255, 255, 255, 0.3);
       border-radius: 50%;
     }
     #joystickMovementKnob {
       position: absolute;
-      width: 50px;
-      height: 50px;
+      width: 58px;
+      height: 58px;
       background: rgba(255, 255, 255, 0.7);
       border-radius: 50%;
-      top: 25px;
-      left: 25px;
+      top: 28.5px;
+      left: 28.5px;
       touch-action: none;
     }
     /* Shooting Joystick (Left) – Increased size by ~15% and repositioned */
@@ -182,6 +182,8 @@
       }
       movementJoystickVector.x = dx / maxDistance;
       movementJoystickVector.y = dy / maxDistance;
+  // Update player's facing angle from movement joystick
+  playerAngle = Math.atan2(dy, dx);
       joystickMovementKnob.style.left = ((joystickMovementContainer.offsetWidth - joystickMovementKnob.offsetWidth) / 2 + dx) + "px";
       joystickMovementKnob.style.top = ((joystickMovementContainer.offsetHeight - joystickMovementKnob.offsetHeight) / 2 + dy) + "px";
     }
@@ -228,9 +230,6 @@
       // Update the shooting knob's position
       joystickShootingKnob.style.left = ((joystickShootingContainer.offsetWidth - joystickShootingKnob.offsetWidth) / 2 + dx) + "px";
       joystickShootingKnob.style.top = ((joystickShootingContainer.offsetHeight - joystickShootingKnob.offsetHeight) / 2 + dy) + "px";
-      // Update the player's facing angle based on shooting direction
-      let shootAngle = Math.atan2(dy, dx);
-      playerAngle = shootAngle;
     }
 
     joystickShootingContainer.addEventListener('touchstart', (e) => {
