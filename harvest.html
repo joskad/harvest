@@ -29,6 +29,7 @@
       background: rgba(0, 0, 0, 0.5);
       padding: 10px 15px;
       border-radius: 5px;
+      z-index: 100;
     }
     #winMessage {
       position: absolute;
@@ -40,30 +41,34 @@
       padding: 20px 40px;
       border-radius: 10px;
       display: none;
+      z-index: 100;
     }
-    /* On-screen controls */
-    #controls {
-      position: fixed;
+    /* Joystick styling */
+    #joystickContainer {
+      position: absolute;
       bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      z-index: 1000;
+      left: 20px;
+      width: 100px;
+      height: 100px;
+      z-index: 200;
+      touch-action: none;
     }
-    #controls button {
-      background-color: rgba(255, 255, 255, 0.7);
-      border: none;
-      padding: 10px;
-      margin: 5px;
-      font-size: 18px;
-      border-radius: 5px;
+    #joystickBase {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
     }
-    #middleControls {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
+    #joystickKnob {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 50%;
+      top: 25px;
+      left: 25px;
+      touch-action: none;
     }
   </style>
 </head>
@@ -72,15 +77,10 @@
   <div id="winMessage">You Win!</div>
   <canvas id="gameCanvas" width="800" height="600" tabindex="1"></canvas>
   
-  <!-- On-screen controls -->
-  <div id="controls">
-    <button id="upBtn">↑</button>
-    <div id="middleControls">
-      <button id="leftBtn">←</button>
-      <button id="shootBtn">Shoot</button>
-      <button id="rightBtn">→</button>
-    </div>
-    <button id="downBtn">↓</button>
+  <!-- Virtual Joystick -->
+  <div id="joystickContainer">
+    <div id="joystickBase"></div>
+    <div id="joystickKnob"></div>
   </div>
   
   <script>
@@ -103,7 +103,7 @@
     let gameStartTime = Date.now();
     let lastCloneTime = 0;
 
-    // Track keys pressed and space shooting control
+    // Track keys pressed and space shooting control (still available for keyboard)
     const keys = {};
     let spacePressed = false;
     window.addEventListener('keydown', (e) => {
@@ -124,16 +124,51 @@
       }
     });
 
-    // On-screen controls (for touch devices)
-    document.getElementById('upBtn').addEventListener('touchstart', () => { keys['ArrowUp'] = true; });
-    document.getElementById('upBtn').addEventListener('touchend', () => { keys['ArrowUp'] = false; });
-    document.getElementById('leftBtn').addEventListener('touchstart', () => { keys['ArrowLeft'] = true; });
-    document.getElementById('leftBtn').addEventListener('touchend', () => { keys['ArrowLeft'] = false; });
-    document.getElementById('downBtn').addEventListener('touchstart', () => { keys['ArrowDown'] = true; });
-    document.getElementById('downBtn').addEventListener('touchend', () => { keys['ArrowDown'] = false; });
-    document.getElementById('rightBtn').addEventListener('touchstart', () => { keys['ArrowRight'] = true; });
-    document.getElementById('rightBtn').addEventListener('touchend', () => { keys['ArrowRight'] = false; });
-    document.getElementById('shootBtn').addEventListener('touchstart', () => { shootBullet(); });
+    // Virtual Joystick
+    const joystickContainer = document.getElementById('joystickContainer');
+    const joystickKnob = document.getElementById('joystickKnob');
+    let joystickVector = { x: 0, y: 0 };
+    let joystickActive = false;
+    let joystickCenter = { x: 0, y: 0 };
+
+    function handleJoystickTouch(e) {
+      e.preventDefault();
+      let touch = e.touches[0];
+      let dx = touch.clientX - joystickCenter.x;
+      let dy = touch.clientY - joystickCenter.y;
+      let maxDistance = (joystickContainer.offsetWidth / 2) - (joystickKnob.offsetWidth / 2);
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > maxDistance) {
+        let angle = Math.atan2(dy, dx);
+        dx = Math.cos(angle) * maxDistance;
+        dy = Math.sin(angle) * maxDistance;
+      }
+      joystickVector.x = dx / maxDistance;
+      joystickVector.y = dy / maxDistance;
+      joystickKnob.style.left = ((joystickContainer.offsetWidth - joystickKnob.offsetWidth) / 2 + dx) + "px";
+      joystickKnob.style.top = ((joystickContainer.offsetHeight - joystickKnob.offsetHeight) / 2 + dy) + "px";
+    }
+
+    joystickContainer.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      joystickActive = true;
+      let rect = joystickContainer.getBoundingClientRect();
+      joystickCenter.x = rect.left + rect.width / 2;
+      joystickCenter.y = rect.top + rect.height / 2;
+      handleJoystickTouch(e);
+    });
+    joystickContainer.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      handleJoystickTouch(e);
+    });
+    joystickContainer.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      joystickActive = false;
+      joystickVector.x = 0;
+      joystickVector.y = 0;
+      joystickKnob.style.left = ((joystickContainer.offsetWidth - joystickKnob.offsetWidth) / 2) + "px";
+      joystickKnob.style.top = ((joystickContainer.offsetHeight - joystickKnob.offsetHeight) / 2) + "px";
+    });
 
     // Player: represented as a Pac-Man style character with animated mouth
     const player = {
@@ -144,7 +179,7 @@
     };
 
     let playerAngle = 0; // direction player is facing
-    // Load player image (not used in Pac-Man mode, but kept for reference)
+    // Load player image (not used in Pac-Man mode, kept for reference)
     const playerImage = new Image();
     playerImage.src = "rose_cat.png";
     let useFallback = false;
@@ -177,8 +212,7 @@
     const totalRaspberries = 20;
     const totalBlueberries = 5;
     function initFruits() {
-      fruits.length = 0; // clear current fruits
-      // Create raspberries
+      fruits.length = 0;
       for (let i = 0; i < totalRaspberries; i++) {
         fruits.push({
           x: Math.random() * (canvas.width - 40) + 20,
@@ -187,7 +221,6 @@
           type: 'raspberry'
         });
       }
-      // Create blueberries
       for (let i = 0; i < totalBlueberries; i++) {
         fruits.push({
           x: Math.random() * (canvas.width - 40) + 20,
@@ -222,17 +255,14 @@
       return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
     }
 
-    // Check collision between a circle and a rectangle (for player and bullet vs walls)
+    // Check collision between a circle and a rectangle
     function circleRectCollision(circle, rect) {
       let distX = Math.abs(circle.x - rect.x - rect.width / 2);
       let distY = Math.abs(circle.y - rect.y - rect.height / 2);
-
-      if (distX > (rect.width / 2 + circle.radius)) { return false; }
-      if (distY > (rect.height / 2 + circle.radius)) { return false; }
-
-      if (distX <= (rect.width / 2)) { return true; }
-      if (distY <= (rect.height / 2)) { return true; }
-
+      if (distX > (rect.width / 2 + circle.radius)) return false;
+      if (distY > (rect.height / 2 + circle.radius)) return false;
+      if (distX <= (rect.width / 2)) return true;
+      if (distY <= (rect.height / 2)) return true;
       let dx = distX - rect.width / 2;
       let dy = distY - rect.height / 2;
       return (dx * dx + dy * dy <= (circle.radius * circle.radius));
@@ -241,12 +271,9 @@
     // Update game state
     function update() {
       if (gameWon) return;
-
-      // Store old position for collision check with walls
       const oldX = player.x;
       const oldY = player.y;
-
-      // Update player position based on keys (arrow keys or WASD) and update facing angle
+      // Keyboard controls
       if (keys['ArrowUp'] || keys['w']) {
         player.y -= player.speed;
         playerAngle = -Math.PI / 2;
@@ -263,8 +290,11 @@
         player.x += player.speed;
         playerAngle = 0;
       }
+      // Joystick controls
+      player.x += joystickVector.x * player.speed;
+      player.y += joystickVector.y * player.speed;
 
-      // Check collision with walls; if colliding, revert to old position
+      // Collision with walls
       for (let wall of walls) {
         if (circleRectCollision(player, wall)) {
           player.x = oldX;
@@ -272,25 +302,21 @@
           break;
         }
       }
-
       // Update Pac-Man mouth animation
       pacMouthAngle += pacMouthDelta;
       if (pacMouthAngle > 0.5 || pacMouthAngle < 0.1) {
         pacMouthDelta *= -1;
       }
-
-      // Update beetle positions and bounce off canvas boundaries and walls
+      // Update beetle positions
       beetles.forEach(beetle => {
         beetle.x += beetle.dx;
         beetle.y += beetle.dy;
-        // Bounce off canvas edges
         if (beetle.x < beetle.radius || beetle.x > canvas.width - beetle.radius) {
           beetle.dx *= -1;
         }
         if (beetle.y < beetle.radius || beetle.y > canvas.height - beetle.radius) {
           beetle.dy *= -1;
         }
-        // Bounce off walls
         for (let wall of walls) {
           if (circleRectCollision(beetle, wall)) {
             beetle.dx *= -1;
@@ -298,19 +324,16 @@
           }
         }
       });
-
-      // Update bullets positions and check collisions with walls, beetles, and fruits
+      // Update bullets
       for (let i = bullets.length - 1; i >= 0; i--) {
         let bullet = bullets[i];
         bullet.x += bullet.dx;
         bullet.y += bullet.dy;
-        // Remove bullet if off canvas
         if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
           bullets.splice(i, 1);
           continue;
         }
         let bulletRemoved = false;
-        // Check collision with walls: remove bullet and the wall if collision occurs
         for (let w = walls.length - 1; w >= 0; w--) {
           if (circleRectCollision(bullet, walls[w])) {
             bullets.splice(i, 1);
@@ -320,7 +343,6 @@
           }
         }
         if (bulletRemoved) continue;
-        // Check collision with beetles: remove bullet and the beetle
         for (let j = beetles.length - 1; j >= 0; j--) {
           if (distance(bullet.x, bullet.y, beetles[j].x, beetles[j].y) < bullet.radius + beetles[j].radius) {
             bullets.splice(i, 1);
@@ -330,7 +352,6 @@
           }
         }
         if (bulletRemoved) continue;
-        // Check collision with fruits: remove bullet and the fruit
         for (let f = fruits.length - 1; f >= 0; f--) {
           if (distance(bullet.x, bullet.y, fruits[f].x, fruits[f].y) < bullet.radius + fruits[f].radius) {
             bullets.splice(i, 1);
@@ -340,8 +361,7 @@
           }
         }
       }
-
-      // Check collision between player and fruits
+      // Collision between player and fruits
       for (let i = fruits.length - 1; i >= 0; i--) {
         const fruit = fruits[i];
         if (distance(player.x, player.y, fruit.x, fruit.y) < player.radius + fruit.radius) {
@@ -353,8 +373,7 @@
           fruits.splice(i, 1);
         }
       }
-
-      // Beetles eat fruits if they come close and clone themselves (with 10s delay from game start and 5s between clones)
+      // Beetles eat fruits and clone themselves (with delays)
       beetles.forEach(beetle => {
         for (let i = fruits.length - 1; i >= 0; i--) {
           const fruit = fruits[i];
@@ -375,8 +394,7 @@
           }
         }
       });
-
-      // Bugs clone when they collide with each other (with delay)
+      // Bugs clone on collision (with delay)
       for (let i = 0; i < beetles.length; i++) {
         for (let j = i + 1; j < beetles.length; j++) {
           if (distance(beetles[i].x, beetles[i].y, beetles[j].x, beetles[j].y) < beetles[i].radius + beetles[j].radius) {
@@ -395,26 +413,20 @@
           }
         }
       }
-
-      // Check collision between beetles and player
+      // Collision between beetles and player
       beetles.forEach(beetle => {
         if (distance(player.x, player.y, beetle.x, beetle.y) < player.radius + beetle.radius) {
           score = Math.max(0, score - 10);
-          collisionMessageTimer = 60; // show collision effect for 60 frames
+          collisionMessageTimer = 60;
         }
       });
-
-      // Respawn fruits if too few remain on the field
+      // Respawn fruits if needed
       if (fruits.length < 10) {
         initFruits();
       }
-
-      // Update collision effect timer
       if (collisionMessageTimer > 0) {
         collisionMessageTimer--;
       }
-
-      // Update the score display and check win condition (50 raspberries collected)
       scoreDisplay.textContent = "Score: " + score;
       if (score >= 50) {
         gameWon = true;
@@ -436,7 +448,7 @@
       ctx.restore();
     }
 
-    // Draw fruit: raspberries are clusters with extra detail; blueberries use a gradient
+    // Draw fruit
     function drawFruit(fruit) {
       ctx.save();
       ctx.translate(fruit.x, fruit.y);
@@ -464,11 +476,10 @@
       ctx.restore();
     }
 
-    // Draw beetle: enhanced with gradient, eyes, and legs
+    // Draw beetle
     function drawBeetle(beetle) {
       ctx.save();
       ctx.translate(beetle.x, beetle.y);
-      // Body with gradient
       let gradient = ctx.createRadialGradient(0, 0, beetle.radius / 4, 0, 0, beetle.radius);
       gradient.addColorStop(0, "#A0522D");
       gradient.addColorStop(1, "#8B4513");
@@ -476,12 +487,10 @@
       ctx.beginPath();
       ctx.ellipse(0, 0, beetle.radius, beetle.radius * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Head
       ctx.beginPath();
       ctx.arc(beetle.radius * 0.8, 0, beetle.radius * 0.3, 0, Math.PI * 2);
       ctx.fillStyle = "#8B4513";
       ctx.fill();
-      // Eyes
       ctx.beginPath();
       ctx.arc(beetle.radius * 0.8, -beetle.radius * 0.1, beetle.radius * 0.1, 0, Math.PI * 2);
       ctx.fillStyle = "#fff";
@@ -493,7 +502,7 @@
       ctx.restore();
     }
 
-    // Draw walls (obstacles)
+    // Draw walls
     function drawWalls() {
       ctx.save();
       ctx.fillStyle = "#555";
@@ -515,30 +524,16 @@
       ctx.restore();
     }
 
-    // Draw all game elements
+    // Draw all elements
     function draw() {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Draw background field
       ctx.fillStyle = "#6B8E23";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw walls
       drawWalls();
-      
-      // Draw fruits
       fruits.forEach(fruit => drawFruit(fruit));
-      
-      // Draw beetles
       beetles.forEach(beetle => drawBeetle(beetle));
-      
-      // Draw bullets
       drawBullets();
-      
-      // Draw player
       drawPlayer();
-
-      // Display collision effect if active
       if (collisionMessageTimer > 0) {
         ctx.save();
         ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
@@ -552,7 +547,6 @@
       }
     }
 
-    // Main game loop
     function gameLoop() {
       update();
       draw();
