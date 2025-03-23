@@ -43,24 +43,24 @@
       display: none;
       z-index: 100;
     }
-    /* Joystick styling */
-    #joystickContainer {
+    /* Movement Joystick (Right) */
+    #joystickMovementContainer {
       position: absolute;
       bottom: 20px;
-      left: 20px;
+      right: 20px;
       width: 100px;
       height: 100px;
       z-index: 200;
       touch-action: none;
     }
-    #joystickBase {
+    #joystickMovementBase {
       position: absolute;
       width: 100px;
       height: 100px;
       background: rgba(255, 255, 255, 0.3);
       border-radius: 50%;
     }
-    #joystickKnob {
+    #joystickMovementKnob {
       position: absolute;
       width: 50px;
       height: 50px;
@@ -70,6 +70,34 @@
       left: 25px;
       touch-action: none;
     }
+    /* Shooting Joystick (Left) – 10% bigger knob, moved up a bit */
+    #joystickShootingContainer {
+      position: absolute;
+      bottom: 80px;  /* moved up compared to bottom edge */
+      left: 20px;
+      width: 110px;
+      height: 110px;
+      z-index: 200;
+      touch-action: none;
+    }
+    #joystickShootingBase {
+      position: absolute;
+      width: 110px;
+      height: 110px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+    }
+    #joystickShootingKnob {
+      position: absolute;
+      width: 55px; /* 10% larger than 50px */
+      height: 55px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 50%;
+      /* Centered within container (110px - 55px)/2 = 27.5px */
+      top: 27.5px;
+      left: 27.5px;
+      touch-action: none;
+    }
   </style>
 </head>
 <body>
@@ -77,10 +105,16 @@
   <div id="winMessage">You Win!</div>
   <canvas id="gameCanvas" width="800" height="600" tabindex="1"></canvas>
   
-  <!-- Virtual Joystick -->
-  <div id="joystickContainer">
-    <div id="joystickBase"></div>
-    <div id="joystickKnob"></div>
+  <!-- Movement Joystick (Right) -->
+  <div id="joystickMovementContainer">
+    <div id="joystickMovementBase"></div>
+    <div id="joystickMovementKnob"></div>
+  </div>
+  
+  <!-- Shooting Joystick (Left) -->
+  <div id="joystickShootingContainer">
+    <div id="joystickShootingBase"></div>
+    <div id="joystickShootingKnob"></div>
   </div>
   
   <script>
@@ -103,7 +137,7 @@
     let gameStartTime = Date.now();
     let lastCloneTime = 0;
 
-    // Track keys pressed and space shooting control (still available for keyboard)
+    // Track keys for keyboard input (still supported)
     const keys = {};
     let spacePressed = false;
     window.addEventListener('keydown', (e) => {
@@ -124,53 +158,100 @@
       }
     });
 
-    // Virtual Joystick
-    const joystickContainer = document.getElementById('joystickContainer');
-    const joystickKnob = document.getElementById('joystickKnob');
-    let joystickVector = { x: 0, y: 0 };
-    let joystickActive = false;
-    let joystickCenter = { x: 0, y: 0 };
+    // --- Virtual Joystick Setup ---
 
-    function handleJoystickTouch(e) {
+    // Movement Joystick (Right)
+    const joystickMovementContainer = document.getElementById('joystickMovementContainer');
+    const joystickMovementKnob = document.getElementById('joystickMovementKnob');
+    let movementJoystickVector = { x: 0, y: 0 };
+    let movementJoystickCenter = { x: 0, y: 0 };
+
+    function handleMovementJoystickTouch(e) {
       e.preventDefault();
       let touch = e.touches[0];
-      let dx = touch.clientX - joystickCenter.x;
-      let dy = touch.clientY - joystickCenter.y;
-      let maxDistance = (joystickContainer.offsetWidth / 2) - (joystickKnob.offsetWidth / 2);
+      let rect = joystickMovementContainer.getBoundingClientRect();
+      movementJoystickCenter.x = rect.left + rect.width / 2;
+      movementJoystickCenter.y = rect.top + rect.height / 2;
+      let dx = touch.clientX - movementJoystickCenter.x;
+      let dy = touch.clientY - movementJoystickCenter.y;
+      let maxDistance = (joystickMovementContainer.offsetWidth - joystickMovementKnob.offsetWidth) / 2;
       let dist = Math.sqrt(dx*dx + dy*dy);
       if (dist > maxDistance) {
         let angle = Math.atan2(dy, dx);
         dx = Math.cos(angle) * maxDistance;
         dy = Math.sin(angle) * maxDistance;
       }
-      joystickVector.x = dx / maxDistance;
-      joystickVector.y = dy / maxDistance;
-      joystickKnob.style.left = ((joystickContainer.offsetWidth - joystickKnob.offsetWidth) / 2 + dx) + "px";
-      joystickKnob.style.top = ((joystickContainer.offsetHeight - joystickKnob.offsetHeight) / 2 + dy) + "px";
+      movementJoystickVector.x = dx / maxDistance;
+      movementJoystickVector.y = dy / maxDistance;
+      joystickMovementKnob.style.left = ((joystickMovementContainer.offsetWidth - joystickMovementKnob.offsetWidth) / 2 + dx) + "px";
+      joystickMovementKnob.style.top = ((joystickMovementContainer.offsetHeight - joystickMovementKnob.offsetHeight) / 2 + dy) + "px";
     }
 
-    joystickContainer.addEventListener('touchstart', (e) => {
+    joystickMovementContainer.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      joystickActive = true;
-      let rect = joystickContainer.getBoundingClientRect();
-      joystickCenter.x = rect.left + rect.width / 2;
-      joystickCenter.y = rect.top + rect.height / 2;
-      handleJoystickTouch(e);
+      handleMovementJoystickTouch(e);
     });
-    joystickContainer.addEventListener('touchmove', (e) => {
+    joystickMovementContainer.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      handleJoystickTouch(e);
+      handleMovementJoystickTouch(e);
     });
-    joystickContainer.addEventListener('touchend', (e) => {
+    joystickMovementContainer.addEventListener('touchend', (e) => {
       e.preventDefault();
-      joystickActive = false;
-      joystickVector.x = 0;
-      joystickVector.y = 0;
-      joystickKnob.style.left = ((joystickContainer.offsetWidth - joystickKnob.offsetWidth) / 2) + "px";
-      joystickKnob.style.top = ((joystickContainer.offsetHeight - joystickKnob.offsetHeight) / 2) + "px";
+      movementJoystickVector.x = 0;
+      movementJoystickVector.y = 0;
+      joystickMovementKnob.style.left = ((joystickMovementContainer.offsetWidth - joystickMovementKnob.offsetWidth) / 2) + "px";
+      joystickMovementKnob.style.top = ((joystickMovementContainer.offsetHeight - joystickMovementKnob.offsetHeight) / 2) + "px";
     });
 
-    // Player: represented as a Pac-Man style character with animated mouth
+    // Shooting Joystick (Left)
+    const joystickShootingContainer = document.getElementById('joystickShootingContainer');
+    const joystickShootingKnob = document.getElementById('joystickShootingKnob');
+    let shootingJoystickVector = { x: 0, y: 0 };
+    let shootingJoystickCenter = { x: 0, y: 0 };
+
+    function handleShootingJoystickTouch(e) {
+      e.preventDefault();
+      let touch = e.touches[0];
+      let rect = joystickShootingContainer.getBoundingClientRect();
+      shootingJoystickCenter.x = rect.left + rect.width / 2;
+      shootingJoystickCenter.y = rect.top + rect.height / 2;
+      let dx = touch.clientX - shootingJoystickCenter.x;
+      let dy = touch.clientY - shootingJoystickCenter.y;
+      let maxDistance = (joystickShootingContainer.offsetWidth - joystickShootingKnob.offsetWidth) / 2;
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > maxDistance) {
+        let angle = Math.atan2(dy, dx);
+        dx = Math.cos(angle) * maxDistance;
+        dy = Math.sin(angle) * maxDistance;
+      }
+      shootingJoystickVector.x = dx / maxDistance;
+      shootingJoystickVector.y = dy / maxDistance;
+      joystickShootingKnob.style.left = ((joystickShootingContainer.offsetWidth - joystickShootingKnob.offsetWidth) / 2 + dx) + "px";
+      joystickShootingKnob.style.top = ((joystickShootingContainer.offsetHeight - joystickShootingKnob.offsetHeight) / 2 + dy) + "px";
+    }
+
+    joystickShootingContainer.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleShootingJoystickTouch(e);
+    });
+    joystickShootingContainer.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      handleShootingJoystickTouch(e);
+    });
+    joystickShootingContainer.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      // On release, if the joystick was moved, fire a bullet in that direction.
+      if (shootingJoystickVector.x !== 0 || shootingJoystickVector.y !== 0) {
+        let angle = Math.atan2(shootingJoystickVector.y, shootingJoystickVector.x);
+        shootBullet(angle);
+      }
+      shootingJoystickVector.x = 0;
+      shootingJoystickVector.y = 0;
+      joystickShootingKnob.style.left = ((joystickShootingContainer.offsetWidth - joystickShootingKnob.offsetWidth) / 2) + "px";
+      joystickShootingKnob.style.top = ((joystickShootingContainer.offsetHeight - joystickShootingKnob.offsetHeight) / 2) + "px";
+    });
+
+    // Player: Pac-Man style character
     const player = {
       x: canvas.width / 2,
       y: canvas.height / 2,
@@ -178,8 +259,8 @@
       speed: 3
     };
 
-    let playerAngle = 0; // direction player is facing
-    // Load player image (not used in Pac-Man mode, kept for reference)
+    let playerAngle = 0; // used for shooting direction if not using joystick
+    // Load player image (not used in pac-man mode)
     const playerImage = new Image();
     playerImage.src = "rose_cat.png";
     let useFallback = false;
@@ -187,27 +268,30 @@
       useFallback = true;
     };
 
-    // Bullets fired by the player
-    const bullets = [];
+    // Bullets fired by the player; modified to optionally use a provided angle.
     const bulletSpeed = 6;
-    function shootBullet() {
+    function shootBullet(angle) {
+      if (angle === undefined) {
+        angle = playerAngle;
+      }
       bullets.push({
         x: player.x,
         y: player.y,
-        dx: Math.cos(playerAngle) * bulletSpeed,
-        dy: Math.sin(playerAngle) * bulletSpeed,
+        dx: Math.cos(angle) * bulletSpeed,
+        dy: Math.sin(angle) * bulletSpeed,
         radius: 5
       });
     }
+    const bullets = [];
 
-    // Obstacles: walls (as rectangles)
+    // Obstacles: walls
     const walls = [
       { x: 100, y: 150, width: 150, height: 20 },
       { x: 500, y: 300, width: 20, height: 150 },
       { x: 250, y: 450, width: 200, height: 20 }
     ];
 
-    // Fruit objects: raspberries (good) and blueberries (bad)
+    // Fruits
     const fruits = [];
     const totalRaspberries = 20;
     const totalBlueberries = 5;
@@ -232,7 +316,7 @@
     }
     initFruits();
 
-    // Beetles: wander around and 'eat' the fruits if they get too close.
+    // Beetles
     const beetles = [];
     const totalBeetles = 3;
     function initBeetles() {
@@ -250,12 +334,12 @@
     }
     initBeetles();
 
-    // Helper: Calculate distance between two points
+    // Helper: distance
     function distance(x1, y1, x2, y2) {
       return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
     }
 
-    // Check collision between a circle and a rectangle
+    // Collision between circle and rectangle
     function circleRectCollision(circle, rect) {
       let distX = Math.abs(circle.x - rect.x - rect.width / 2);
       let distY = Math.abs(circle.y - rect.y - rect.height / 2);
@@ -273,7 +357,7 @@
       if (gameWon) return;
       const oldX = player.x;
       const oldY = player.y;
-      // Keyboard controls
+      // Keyboard movement
       if (keys['ArrowUp'] || keys['w']) {
         player.y -= player.speed;
         playerAngle = -Math.PI / 2;
@@ -290,10 +374,9 @@
         player.x += player.speed;
         playerAngle = 0;
       }
-      // Joystick controls
-      player.x += joystickVector.x * player.speed;
-      player.y += joystickVector.y * player.speed;
-
+      // Movement joystick update
+      player.x += movementJoystickVector.x * player.speed;
+      player.y += movementJoystickVector.y * player.speed;
       // Collision with walls
       for (let wall of walls) {
         if (circleRectCollision(player, wall)) {
@@ -307,7 +390,7 @@
       if (pacMouthAngle > 0.5 || pacMouthAngle < 0.1) {
         pacMouthDelta *= -1;
       }
-      // Update beetle positions
+      // Update beetles
       beetles.forEach(beetle => {
         beetle.x += beetle.dx;
         beetle.y += beetle.dy;
@@ -373,7 +456,7 @@
           fruits.splice(i, 1);
         }
       }
-      // Beetles eat fruits and clone themselves (with delays)
+      // Beetles eat fruits and clone (with delay)
       beetles.forEach(beetle => {
         for (let i = fruits.length - 1; i >= 0; i--) {
           const fruit = fruits[i];
@@ -524,7 +607,7 @@
       ctx.restore();
     }
 
-    // Draw all elements
+    // Draw everything
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#6B8E23";
